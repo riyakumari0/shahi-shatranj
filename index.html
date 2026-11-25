@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shahi Shatranj</title>
+<meta name="description" content="A 3D royal chess game in the style of a Mughal miniature painting.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Cinzel:wght@500;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&display=swap" rel="stylesheet">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<style>
+:root{
+  --lapis:#1d3a8a; --lapis-deep:#0e1d4a; --gold:#d4a73a; --gold-light:#f3d98b; --gold-dark:#8a6a1c;
+  --vermilion:#b93a26; --maroon:#5e1814; --malachite:#1f6b55; --ivory:#f6ecd3; --paper:#efe0bd;
+  --ink:#3a2313; --ink-soft:#6b4a2b;
+  --panel-w:290px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#0e1d4a;color:var(--ink);
+  font-family:"Cormorant Garamond",Georgia,serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+#scene{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+
+/* ---------- painted-paper feel over the whole view ---------- */
+#grain{position:fixed;inset:0;pointer-events:none;z-index:5;opacity:.16;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .45 0 0 0 0 .32 0 0 0 0 .15 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E")}
+#vignette{position:fixed;inset:0;pointer-events:none;z-index:4;
+  background:radial-gradient(ellipse at 50% 55%,transparent 55%,rgba(40,20,5,.38) 100%)}
+
+/* ---------- the ornamental frame around the painting ---------- */
+#frame{position:fixed;inset:0;pointer-events:none;z-index:6;
+  box-shadow:inset 0 0 0 2px var(--gold-dark),inset 0 0 0 5px var(--gold),inset 0 0 0 7px var(--gold-dark),
+    inset 0 0 0 13px var(--lapis),inset 0 0 0 14px var(--gold-light),inset 0 0 0 17px var(--vermilion),
+    inset 0 0 0 18px var(--gold-dark),inset 0 0 26px 18px rgba(20,10,0,.35)}
+#frame::before{content:"";position:absolute;inset:7px;border:1px dotted rgba(243,217,139,.8);border-radius:2px}
+.corner{position:absolute;width:62px;height:62px}
+.corner.tl{left:0;top:0}.corner.tr{right:0;top:0;transform:scaleX(-1)}
+.corner.bl{left:0;bottom:0;transform:scaleY(-1)}.corner.br{right:0;bottom:0;transform:scale(-1,-1)}
+
+/* ---------- folio panels ---------- */
+.folio{position:relative;background:
+   radial-gradient(ellipse at 50% 40%,#f8eed6 0%,var(--paper) 62%,#dcc595 100%);
+  border:2px solid var(--gold);outline:1px solid var(--gold-dark);outline-offset:3px;
+  box-shadow:0 0 0 6px var(--lapis),0 0 0 7px var(--gold-dark),0 14px 34px rgba(10,5,0,.45);
+  border-radius:3px;padding:14px 16px}
+.folio::before{content:"";position:absolute;inset:5px;border:1px solid rgba(185,58,38,.55);pointer-events:none}
+.folio h2{font-family:"Cinzel Decorative",serif;font-weight:700;font-size:15px;letter-spacing:.06em;
+  color:var(--maroon);margin:0 0 8px;text-align:center}
+.folio h2::after{content:"";display:block;height:8px;margin:5px auto 0;width:70%;
+  background:radial-gradient(circle,var(--gold) 2.5px,transparent 3px) center/14px 8px repeat-x}
+
+#ui{position:fixed;inset:0;z-index:10;pointer-events:none}
+#ui > *{pointer-events:auto}
+
+/* title cartouche */
+#title{position:absolute;top:26px;left:50%;transform:translateX(-50%);text-align:center;
+  padding:8px 34px 9px;min-width:300px;
+  background:linear-gradient(#173070,#0e1d4a);border:2px solid var(--gold);
+  box-shadow:0 0 0 4px var(--maroon),0 0 0 5px var(--gold),0 10px 24px rgba(0,0,0,.45);
+  border-radius:40px/50%;color:var(--gold-light)}
+#title h1{margin:0;font-family:"Cinzel Decorative",serif;font-size:24px;letter-spacing:.08em;font-weight:700;
+  text-shadow:0 2px 0 #000,0 0 12px rgba(243,217,139,.35)}
+#title .sub{font-family:Cinzel,serif;font-size:10.5px;letter-spacing:.32em;color:#e9c97a;opacity:.9;text-transform:uppercase}
+
+/* turn banner */
+#banner{position:absolute;top:104px;left:50%;transform:translateX(-50%);
+  font-family:Cinzel,serif;font-weight:700;font-size:15px;letter-spacing:.12em;text-transform:uppercase;
+  padding:7px 22px;border-radius:3px;white-space:nowrap;
+  background:var(--ivory);border:1.5px solid var(--gold);box-shadow:0 0 0 3px var(--vermilion),0 0 0 4px var(--gold-dark),0 8px 18px rgba(0,0,0,.35);
+  transition:background .4s,color .4s,transform .35s}
+#banner.black{background:#1b1410;color:var(--gold-light)}
+#banner.check{animation:pulse 1s ease-in-out infinite}
+#banner .dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:9px;vertical-align:1px;
+  border:1.5px solid var(--gold-dark);background:var(--ivory)}
+#banner.black .dot{background:#1b1410;border-color:var(--gold)}
+@keyframes pulse{50%{box-shadow:0 0 0 3px var(--vermilion),0 0 0 4px var(--gold-dark),0 0 26px 6px rgba(220,60,40,.75)}}
+
+/* side panels */
+#left,#right{position:absolute;top:96px;width:var(--panel-w);max-height:calc(100% - 200px);display:flex;flex-direction:column;gap:18px}
+#left{left:36px}#right{right:36px}
+.court{display:flex;gap:12px;align-items:center;padding:12px 14px;transition:transform .3s,box-shadow .3s}
+.court.active{transform:translateX(4px);
+  box-shadow:0 0 0 6px var(--lapis),0 0 0 7px var(--gold-dark),0 0 0 10px rgba(243,217,139,.9),0 0 30px 8px rgba(243,217,139,.55)}
+#right .court.active{transform:translateX(-4px)}
+.seal{flex:none;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-size:32px;line-height:1;
+  border:2px solid var(--gold);box-shadow:0 0 0 3px var(--maroon),0 0 0 4px var(--gold-dark)}
+.seal.w{background:radial-gradient(circle at 40% 35%,#fffaf0,#e9dcc0);color:#5b3a1a}
+.seal.b{background:radial-gradient(circle at 40% 35%,#3a2c22,#120d0a);color:var(--gold-light)}
+.court .who{font-family:Cinzel,serif;font-weight:700;font-size:15px;color:var(--maroon);letter-spacing:.04em}
+.court .role{font-size:14px;color:var(--ink-soft);font-style:italic;margin-top:-2px}
+.court .taken{font-size:21px;line-height:1.05;min-height:22px;margin-top:3px;letter-spacing:-1px;color:var(--ink)}
+.court .adv{font-family:Cinzel,serif;font-size:12px;color:var(--malachite);font-weight:700;margin-left:6px;letter-spacing:0}
+.court .tomove{display:none;font-family:Cinzel,serif;font-size:10px;letter-spacing:.18em;color:#fff;background:var(--vermilion);
+  padding:2px 7px;border-radius:2px;margin-left:6px;vertical-align:2px}
+.court.active .tomove{display:inline-block}
+
+#card .glyph{float:left;font-size:54px;line-height:1;margin:0 12px 2px 0;width:62px;height:62px;display:grid;place-items:center;
+  border-radius:50%;border:2px solid var(--gold);box-shadow:0 0 0 3px var(--lapis);background:radial-gradient(circle at 40% 35%,#fffaf0,#e3d2ab)}
+#card .glyph.b{background:radial-gradient(circle at 40% 35%,#3a2c22,#120d0a);color:var(--gold-light)}
+#card .name{font-family:Cinzel,serif;font-weight:700;font-size:17px;color:var(--maroon)}
+#card .title{font-style:italic;color:var(--ink-soft);font-size:15px}
+#card p{margin:8px 0 0;font-size:15.5px;line-height:1.35;clear:both}
+#card .count{margin-top:8px;font-family:Cinzel,serif;font-size:11.5px;letter-spacing:.08em;color:var(--malachite);font-weight:700}
+#card .hint{font-size:15px;font-style:italic;color:var(--ink-soft);text-align:center;margin:4px 0}
+
+#chronicle{display:flex;flex-direction:column;min-height:0;flex:1}
+#moves{overflow-y:auto;min-height:80px;max-height:44vh;font-size:16.5px;scrollbar-width:thin;scrollbar-color:var(--gold) transparent}
+#moves table{width:100%;border-collapse:collapse}
+#moves td{padding:3px 6px;border-bottom:1px dotted rgba(138,106,28,.45)}
+#moves td.n{width:34px;color:var(--gold-dark);font-family:Cinzel,serif;font-size:12px;text-align:right}
+#moves td.mv{font-weight:600;font-variant-numeric:tabular-nums}
+#moves td.last{background:rgba(212,167,58,.28);border-radius:2px}
+#moves .empty{font-style:italic;color:var(--ink-soft);text-align:center;padding:10px 0}
+#status{margin-top:8px;text-align:center;font-family:Cinzel,serif;font-size:12.5px;letter-spacing:.08em;color:var(--vermilion);min-height:17px}
+
+/* toolbar */
+#toolbar{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);display:flex;gap:6px;padding:7px 9px;
+  background:linear-gradient(#173070,#0e1d4a);border:2px solid var(--gold);border-radius:4px;
+  box-shadow:0 0 0 4px var(--maroon),0 0 0 5px var(--gold),0 12px 28px rgba(0,0,0,.5)}
+.tb{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:62px;padding:6px 8px 5px;border:0;border-radius:3px;
+  background:transparent;color:var(--gold-light);cursor:pointer;font-family:Cinzel,serif;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  transition:background .2s,color .2s,transform .15s}
+.tb svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.tb:hover{background:rgba(243,217,139,.14);color:#fff}
+.tb:active{transform:translateY(1px)}
+.tb:focus-visible{outline:2px solid var(--gold-light);outline-offset:1px}
+.tb.on{background:rgba(212,167,58,.28);color:#fff}
+.tb[disabled]{opacity:.38;cursor:default}
+.tb.mobile-only{display:none}
+.sep{width:1px;background:rgba(243,217,139,.3);margin:4px 2px}
+
+/* hover tooltip */
+#tip{position:fixed;z-index:20;pointer-events:none;opacity:0;transform:translateY(6px);transition:opacity .15s,transform .15s;
+  max-width:250px;padding:9px 13px;font-size:15px;line-height:1.3}
+#tip.show{opacity:1;transform:none}
+#tip b{font-family:Cinzel,serif;color:var(--maroon);font-size:14.5px}
+#tip i{color:var(--ink-soft)}
+
+/* toast */
+#toast{position:absolute;top:44%;left:50%;transform:translate(-50%,-50%) scale(.8);opacity:0;pointer-events:none;
+  font-family:"Cinzel Decorative",serif;font-weight:700;font-size:52px;color:var(--gold-light);letter-spacing:.06em;
+  text-shadow:0 3px 0 var(--maroon),0 0 4px #000,0 0 30px rgba(185,58,38,.9);transition:opacity .35s,transform .5s cubic-bezier(.2,1.4,.4,1)}
+#toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+/* modals */
+.modal{position:fixed;inset:0;z-index:30;display:none;place-items:center;background:rgba(8,12,30,.55);backdrop-filter:blur(2px);padding:16px}
+.modal.open{display:grid}
+.modal .folio{width:min(520px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:22px 26px 24px;animation:unroll .45s cubic-bezier(.2,1.2,.4,1)}
+@keyframes unroll{from{transform:scaleY(.4);opacity:0}}
+.modal h2{font-size:22px}
+.modal p{font-size:17px;line-height:1.45;margin:8px 0}
+.opt-label{font-family:Cinzel,serif;font-weight:700;font-size:12px;letter-spacing:.14em;color:var(--maroon);text-transform:uppercase;margin:16px 0 7px}
+.choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.choice{border:1.5px solid var(--gold-dark);background:rgba(255,250,235,.7);border-radius:3px;padding:9px 10px;cursor:pointer;text-align:center;
+  font-size:16px;font-weight:600;transition:all .18s}
+.choice small{display:block;font-weight:500;font-style:italic;color:var(--ink-soft);font-size:13.5px}
+.choice:hover{background:#fff8e4;border-color:var(--gold)}
+.choice.sel{background:var(--lapis);color:var(--gold-light);border-color:var(--gold);box-shadow:0 0 0 2px var(--gold)}
+.choice.sel small{color:#d9c592}
+.choice:focus-visible{outline:2px solid var(--vermilion)}
+.big{display:block;margin:22px auto 0;padding:11px 34px;font-family:Cinzel,serif;font-weight:700;font-size:15px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--gold-light);background:linear-gradient(#c24a32,#8e2717);border:2px solid var(--gold);border-radius:3px;cursor:pointer;
+  box-shadow:0 0 0 3px var(--maroon),0 6px 14px rgba(0,0,0,.3);transition:transform .15s,filter .15s}
+.big:hover{filter:brightness(1.1)}.big:active{transform:translateY(1px)}
+.row-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.row-btns .big{margin:18px 0 0}
+.big.alt{background:linear-gradient(#21418f,#12265c)}
+#promo .choices{grid-template-columns:repeat(4,1fr)}
+#promo .choice{font-size:44px;line-height:1.1;padding:10px 0 6px}
+#promo .choice small{font-size:12.5px;font-family:Cinzel,serif;font-style:normal;letter-spacing:.06em}
+#over .crest{font-size:72px;text-align:center;line-height:1;margin:4px 0 0;color:var(--maroon)}
+#guide ul{padding-left:18px;margin:6px 0}#guide li{margin:5px 0;font-size:16px;line-height:1.35}
+#guide .pcs{display:grid;grid-template-columns:38px 1fr;gap:4px 10px;align-items:center;font-size:15.5px}
+#guide .pcs span:nth-child(odd){font-size:30px;text-align:center}
+kbd{font-family:Cinzel,serif;font-size:11px;border:1px solid var(--gold-dark);border-bottom-width:2px;border-radius:3px;padding:0 5px;background:#fff8e4}
+
+/* loading */
+#loading{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:radial-gradient(circle,#1d3a8a,#0a1433);
+  color:var(--gold-light);font-family:Cinzel,serif;text-align:center;transition:opacity .8s}
+#loading.hide{opacity:0;pointer-events:none}
+#loading .emb{font-size:64px;animation:spin 3s linear infinite;display:inline-block}
+#loading p{letter-spacing:.2em;text-transform:uppercase;font-size:13px}
+#loading .err{color:#ffb4a4;letter-spacing:0;text-transform:none;font-family:"Cormorant Garamond",serif;font-size:18px;max-width:380px;margin:auto}
+@keyframes spin{to{transform:rotateY(360deg)}}
+
+/* ---------- smaller screens ---------- */
+@media (max-width:1180px){:root{--panel-w:240px}#card p{font-size:14.5px}}
+@media (max-width:900px){
+  #title{top:22px;min-width:0;padding:6px 22px;white-space:nowrap}#title h1{font-size:18px}#title .sub{font-size:8.5px;letter-spacing:.18em}
+  #banner{top:84px;font-size:12.5px;padding:5px 14px}
+  #left{left:50%;transform:translateX(-50%);top:auto;bottom:100px;width:calc(100% - 56px);max-width:520px;flex-direction:row;gap:10px}
+  #left .court{flex:1;padding:7px 9px;gap:8px}
+  #left .court.active,#right .court.active{transform:none}
+  .seal{width:36px;height:36px;font-size:23px}
+  .court .who{font-size:12.5px}.court .role{font-size:12px}.court .taken{font-size:16px;min-height:16px}
+  #card{display:none}
+  #right{display:none;right:50%;transform:translateX(50%);top:130px;width:calc(100% - 56px);max-width:420px;max-height:calc(100% - 290px)}
+  #right.open{display:flex}
+  .tb{min-width:44px;padding:6px 5px}.tb span{display:none}.tb.mobile-only{display:flex}
+  #toolbar{bottom:28px;gap:2px;padding:5px}
+  #toast{font-size:34px}
+}
+@media (max-width:420px){.tb{min-width:38px}.tb svg{width:21px;height:21px}#left .court .role{display:none}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<canvas id="scene" tabindex="0" aria-label="3D chess board"></canvas>
+<div id="vignette"></div>
+<div id="grain"></div>
+<div id="frame">
+  <svg class="corner tl" viewBox="0 0 62 62" aria-hidden="true">
+    <path d="M0 0h62v6c-22 1-38 7-46 20S6 50 6 62H0z" fill="#d4a73a"/>
+    <path d="M10 10h40c-17 2-28 8-33 15s-7 15-7 25z" fill="#b93a26"/>
+    <circle cx="23" cy="23" r="7" fill="#1d3a8a" stroke="#f3d98b" stroke-width="2"/>
+    <circle cx="23" cy="23" r="2.4" fill="#f3d98b"/>
+  </svg>
+  <svg class="corner tr" viewBox="0 0 62 62" aria-hidden="true">
+    <path d="M0 0h62v6c-22 1-38 7-46 20S6 50 6 62H0z" fill="#d4a73a"/>
+    <path d="M10 10h40c-17 2-28 8-33 15s-7 15-7 25z" fill="#b93a26"/>
+    <circle cx="23" cy="23" r="7" fill="#1d3a8a" stroke="#f3d98b" stroke-width="2"/><circle cx="23" cy="23" r="2.4" fill="#f3d98b"/>
+  </svg>
+  <svg class="corner bl" viewBox="0 0 62 62" aria-hidden="true">
+    <path d="M0 0h62v6c-22 1-38 7-46 20S6 50 6 62H0z" fill="#d4a73a"/>
+    <path d="M10 10h40c-17 2-28 8-33 15s-7 15-7 25z" fill="#b93a26"/>
+    <circle cx="23" cy="23" r="7" fill="#1d3a8a" stroke="#f3d98b" stroke-width="2"/><circle cx="23" cy="23" r="2.4" fill="#f3d98b"/>
+  </svg>
+  <svg class="corner br" viewBox="0 0 62 62" aria-hidden="true">
+    <path d="M0 0h62v6c-22 1-38 7-46 20S6 50 6 62H0z" fill="#d4a73a"/>
+    <path d="M10 10h40c-17 2-28 8-33 15s-7 15-7 25z" fill="#b93a26"/>
+    <circle cx="23" cy="23" r="7" fill="#1d3a8a" stroke="#f3d98b" stroke-width="2"/><circle cx="23" cy="23" r="2.4" fill="#f3d98b"/>
+  </svg>
+</div>
+
+<div id="ui">
+  <header id="title"><h1>Shahi Shatranj</h1><div class="sub">The Royal Game of the Court</div></header>
+  <div id="banner"><span class="dot"></span><span id="bannerText">White to move</span></div>
+
+  <aside id="left">
+    <section class="folio court" id="courtW">
+      <div class="seal w">♔</div>
+      <div><div class="who" id="nameW">White Court<span class="tomove">to move</span></div>
+        <div class="role" id="roleW">Ivory &amp; gold</div>
+        <div class="taken" id="takenW"></div></div>
+    </section>
+    <section class="folio court" id="courtB">
+      <div class="seal b">♚</div>
+      <div><div class="who" id="nameB">Black Court<span class="tomove">to move</span></div>
+        <div class="role" id="roleB">Ebony &amp; gold</div>
+        <div class="taken" id="takenB"></div></div>
+    </section>
+    <section class="folio" id="card">
+      <h2>The Courtier</h2>
+      <div id="cardBody"><div class="hint">Touch or hover over a piece to meet them.</div></div>
+    </section>
+  </aside>
+
+  <aside id="right">
+    <section class="folio" id="chronicle">
+      <h2>Chronicle of Moves</h2>
+      <div id="moves"><div class="empty">The game awaits its first move.</div></div>
+      <div id="status" aria-live="polite"></div>
+    </section>
+  </aside>
+
+  <nav id="toolbar" aria-label="Game controls">
+    <button class="tb" id="btnNew" title="New game (N)"><svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.3L20 9l-4.4 3.8L17 19l-5-3-5 3 1.4-6.2L4 9l5.8-.7z"/></svg><span>New</span></button>
+    <button class="tb" id="btnUndo" title="Take back a move (U)"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg><span>Undo</span></button>
+    <div class="sep"></div>
+    <button class="tb on" id="btnDrone" title="Drone camera swings to whoever moves next (D)"><svg viewBox="0 0 24 24"><rect x="9" y="10" width="6" height="5" rx="1"/><path d="M9 12H5M15 12h4M5 12V9M19 12V9"/><path d="M2.5 9h5M16.5 9h5"/><circle cx="12" cy="17.5" r="1.3"/></svg><span>Drone</span></button>
+    <button class="tb" id="btnTop" title="Bird's-eye view (T)"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 12h16M12 4v16"/></svg><span>Top</span></button>
+    <button class="tb" id="btnView" title="Return to your side (V)"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/></svg><span>View</span></button>
+    <div class="sep"></div>
+    <button class="tb on" id="btnSound" title="Sound (M)"><svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="waves" d="M16.5 8.5a5 5 0 010 7M19 6a8.5 8.5 0 010 12"/></svg><span>Sound</span></button>
+    <button class="tb mobile-only" id="btnLog" title="Chronicle of moves"><svg viewBox="0 0 24 24"><path d="M6 4h11a2 2 0 012 2v12a2 2 0 01-2 2H6"/><path d="M6 4a2 2 0 00-2 2v1h4V6a2 2 0 00-2-2zM6 20a2 2 0 01-2-2v-1h4"/><path d="M10 9h6M10 13h6"/></svg><span>Moves</span></button>
+    <button class="tb" id="btnGuide" title="How to play (H)"><svg viewBox="0 0 24 24"><path d="M4 5c3-1.5 5.5-1.5 8 0v15c-2.5-1.5-5-1.5-8 0z"/><path d="M20 5c-3-1.5-5.5-1.5-8 0v15c2.5-1.5 5-1.5 8 0z"/></svg><span>Guide</span></button>
+  </nav>
+
+  <div id="toast"></div>
+</div>
+
+<div id="tip" class="folio"></div>
+
+<!-- New game -->
+<div class="modal" id="setup" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
+  <div class="folio">
+    <h2 id="setupTitle">Summon the Court</h2>
+    <p style="text-align:center">Choose how the royal game shall be played.</p>
+    <div class="opt-label">Opponent</div>
+    <div class="choices" data-group="mode">
+      <button class="choice sel" data-v="ai">Versus the Vizier<small>play the computer</small></button>
+      <button class="choice" data-v="pvp">Two players<small>pass &amp; play, one screen</small></button>
+    </div>
+    <div id="aiOpts">
+      <div class="opt-label">You command</div>
+      <div class="choices" data-group="side">
+        <button class="choice sel" data-v="w">♔ White<small>moves first</small></button>
+        <button class="choice" data-v="b">♚ Black<small>replies</small></button>
+        <button class="choice" data-v="r">⚄ Fate<small>random</small></button>
+      </div>
+      <div class="opt-label">Vizier's wisdom</div>
+      <div class="choices" data-group="level">
+        <button class="choice" data-v="1">Novice<small>gentle</small></button>
+        <button class="choice sel" data-v="2">Courtier<small>fair match</small></button>
+        <button class="choice" data-v="3">Grand Vizier<small>cunning</small></button>
+      </div>
+    </div>
+    <button class="big" id="begin">Begin the Game</button>
+  </div>
+</div>
+
+<!-- Promotion -->
+<div class="modal" id="promo" role="dialog" aria-modal="true" aria-labelledby="promoTitle">
+  <div class="folio">
+    <h2 id="promoTitle">A Soldier Is Honoured</h2>
+    <p style="text-align:center">Your pawn has reached the far rank. Whom shall they become?</p>
+    <div class="choices" id="promoChoices"></div>
+  </div>
+</div>
+
+<!-- Game over -->
+<div class="modal" id="over" role="dialog" aria-modal="true" aria-labelledby="overTitle">
+  <div class="folio">
+    <div class="crest" id="overCrest">♔</div>
+    <h2 id="overTitle">Checkmate</h2>
+    <p id="overText" style="text-align:center"></p>
+    <div class="row-btns">
+      <button class="big" id="overNew">New Game</button>
+      <button class="big alt" id="overLook">View the Board</button>
+    </div>
+  </div>
+</div>
+
+<!-- Guide -->
+<div class="modal" id="guide" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+  <div class="folio">
+    <h2 id="guideTitle">The Book of the Game</h2>
+    <div class="opt-label">How to play</div>
+    <ul>
+      <li><b>Tap a piece</b> to lift it. Golden dots show where it may go; red rings show captures. Tap a dot to move.</li>
+      <li><b>Drag</b> to look around the board, <b>scroll or pinch</b> to zoom.</li>
+      <li>With <b>Drone</b> on, the camera flies to the side whose turn it is.</li>
+      <li>Keys: <kbd>U</kbd> undo · <kbd>N</kbd> new · <kbd>D</kbd> drone · <kbd>T</kbd> top view · <kbd>V</kbd> your view · <kbd>Esc</kbd> drop piece</li>
+    </ul>
+    <div class="opt-label">The courtiers</div>
+    <div class="pcs">
+      <span>♔</span><div><b>King — Padishah.</b> One square any way. Must never stay in check. Can castle.</div>
+      <span>♕</span><div><b>Queen — Malika.</b> Any distance straight or diagonal.</div>
+      <span>♖</span><div><b>Rook — Rukh, the Fortress.</b> Any distance straight along rows and columns.</div>
+      <span>♗</span><div><b>Bishop — Wazir.</b> Any distance diagonally; stays on one colour.</div>
+      <span>♘</span><div><b>Knight — Aswar, the Cavalier.</b> L-shaped leap; jumps over others.</div>
+      <span>♙</span><div><b>Pawn — Sipahi.</b> Forward one (two on first move), captures diagonally, en passant, promotes on the last rank.</div>
+    </div>
+    <div class="opt-label">How a game ends</div>
+    <ul>
+      <li><b>Checkmate</b> wins. <b>Draws:</b> stalemate, threefold repetition, fifty moves without a capture or pawn move, or too little material to mate.</li>
+    </ul>
+    <button class="big" data-close>Return to the Board</button>
+  </div>
+</div>
+
+<div id="loading"><div><div class="emb">♚</div><p>The court assembles…</p><div class="err" id="loadErr"></div></div></div>
+
+<script src="chess.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
